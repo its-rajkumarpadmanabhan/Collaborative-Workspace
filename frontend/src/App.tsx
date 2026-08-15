@@ -4,6 +4,9 @@ import toast from 'react-hot-toast'
 import { Editor } from './components/Editor'
 import { AuthFlow } from './components/AuthFlow'
 import { Dashboard } from './components/Dashboard'
+import { UserProfile } from './components/UserProfile'
+import { UserSettings } from './components/UserSettings'
+import { PublicDocumentViewer } from './components/PublicDocumentViewer'
 import { useAuth } from './contexts/AuthContext'
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -51,6 +54,22 @@ function App() {
               <DocumentWorkspace />
             </ProtectedRoute>
           } 
+        />
+        <Route 
+          path="/profile/:username" 
+          element={<UserProfile />} 
+        />
+        <Route 
+          path="/settings" 
+          element={
+            <ProtectedRoute>
+              <UserSettings />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/public/:docId" 
+          element={<PublicDocumentViewer />} 
         />
       </Routes>
     </div>
