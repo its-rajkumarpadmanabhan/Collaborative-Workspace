@@ -1,9 +1,41 @@
 from rest_framework import viewsets, permissions, status
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
-from .serializers import WorkspaceSerializer, DocumentSerializer, UserSerializer
-from .services import WorkspaceService, DocumentService
-from .tasks import export_document_task
+from django.contrib.auth import get_user_model, authenticate
+from rest_framework_simplejwt.tokens import RefreshToken
+from .models import Workspace, WorkspaceInvite, WorkspaceMembership, Document
+from .serializers import (
+    UserSerializer, RegisterSerializer, WorkspaceSerializer, 
+    WorkspaceInviteSerializer, DocumentSerializer
+)
+from django.shortcuts import get_object_or_404
+
+User = get_user_model()
+
+# Auth Views
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def register_user(request):
+    serializer = RegisterSerializer(data=request.data)
+    if serializer.is_valid():
+        user = serializer.save()
+        return Response({"message": "User registered successfully"}, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def login_user(request):
+    username = request.data.get('username')
+    password = request.data.get('password')
+    user = authenticate(username=username, password=password)
+    if user:
+        refresh = RefreshToken.for_user(user)
+        return Response({
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+            'user': UserSerializer(user).data
+        })
+    return Response({"error": "Invalid credentials"}, status=status.HTTP_401_UNAUTHORIZED)
 
 class UserViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
@@ -13,54 +45,78 @@ class UserViewSet(viewsets.ViewSet):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
 
-class WorkspaceViewSet(viewsets.ViewSet):
+class WorkspaceViewSet(viewsets.ModelViewSet):
+    serializer_class = WorkspaceSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def list(self, request):
-        workspaces = WorkspaceService.get_user_workspaces(request.user)
-        serializer = WorkspaceSerializer(workspaces, many=True)
-        return Response(serializer.data)
+    def get_queryset(self):
+        user = self.request.user
+        # User can see workspaces they own or have accepted an invite to (via membership)
+        owned = Workspace.objects.filter(owner=user)
+        member_of = Workspace.objects.filter(memberships__user=user)
+        return (owned | member_of).distinct().order_by('-created_at')
 
-    def create(self, request):
-        name = request.data.get('name')
-        if not name:
-            return Response({"error": "Name is required"}, status=status.HTTP_400_BAD_REQUEST)
-        workspace = WorkspaceService.create_workspace(request.user, name)
-        serializer = WorkspaceSerializer(workspace)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-class DocumentViewSet(viewsets.ViewSet):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def list(self, request):
-        workspace_id = request.query_params.get('workspace_id')
-        if not workspace_id:
-            return Response({"error": "workspace_id query parameter is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            documents = DocumentService.get_workspace_documents(workspace_id, request.user)
-        except PermissionError as e:
-            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
-        
-        serializer = DocumentSerializer(documents, many=True)
-        return Response(serializer.data)
-
-    def create(self, request):
-        workspace_id = request.data.get('workspace_id')
-        title = request.data.get('title')
-        if not workspace_id or not title:
-            return Response({"error": "workspace_id and title are required"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            document = DocumentService.create_document(workspace_id, request.user, title)
-        except PermissionError as e:
-            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
-        
-        serializer = DocumentSerializer(document)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    def perform_create(self, serializer):
+        workspace = serializer.save(owner=self.request.user)
+        if workspace.mode == 'room':
+            WorkspaceMembership.objects.create(workspace=workspace, user=self.request.user, role='admin')
 
     @action(detail=True, methods=['post'])
-    def export(self, request, pk=None):
-        format_type = request.data.get('format', 'pdf')
-        task = export_document_task.delay(pk, format_type)
-        return Response({"task_id": task.id, "message": "Export started"}, status=status.HTTP_202_ACCEPTED)
+    def invite(self, request, pk=None):
+        workspace = self.get_object()
+        if workspace.owner != request.user:
+            return Response({"error": "Only the owner can invite users"}, status=status.HTTP_403_FORBIDDEN)
+        
+        username = request.data.get('username')
+        if not username:
+            return Response({"error": "Username is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            receiver = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+            
+        invite, created = WorkspaceInvite.objects.get_or_create(
+            workspace=workspace,
+            receiver=receiver,
+            defaults={'sender': request.user, 'status': 'pending'}
+        )
+        
+        if not created:
+            if invite.status == 'pending':
+                return Response({"error": "Invite is already pending for this user"}, status=status.HTTP_400_BAD_REQUEST)
+            elif invite.status == 'accepted':
+                return Response({"error": "User is already a member of this room"}, status=status.HTTP_400_BAD_REQUEST)
+            else:
+                # User declined previously, so we resend the invite
+                invite.status = 'pending'
+                invite.sender = request.user
+                invite.save()
+                
+        return Response(WorkspaceInviteSerializer(invite).data, status=status.HTTP_201_CREATED)
+
+class InviteViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def list(self, request):
+        invites = WorkspaceInvite.objects.filter(receiver=request.user, status='pending')
+        return Response(WorkspaceInviteSerializer(invites, many=True).data)
+
+    @action(detail=True, methods=['post'])
+    def accept(self, request, pk=None):
+        invite = get_object_or_404(WorkspaceInvite, id=pk, receiver=request.user)
+        if invite.status != 'pending':
+            return Response({"error": "Invite is not pending"}, status=status.HTTP_400_BAD_REQUEST)
+            
+        invite.status = 'accepted'
+        invite.save()
+        WorkspaceMembership.objects.get_or_create(workspace=invite.workspace, user=request.user, defaults={'role': 'member'})
+        
+        return Response({"message": "Invite accepted, joined workspace"})
+
+    @action(detail=True, methods=['post'])
+    def decline(self, request, pk=None):
+        invite = get_object_or_404(WorkspaceInvite, id=pk, receiver=request.user)
+        invite.status = 'declined'
+        invite.save()
+        return Response({"message": "Invite declined"})
