@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react'
-import { Routes, Route, Navigate, useParams } from 'react-router-dom'
+import { Routes, Route, Navigate, useParams, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Editor } from './components/Editor'
 import { AuthFlow } from './components/AuthFlow'
 import { Dashboard } from './components/Dashboard'
+import { UserProfile } from './components/UserProfile'
+import { UserSettings } from './components/UserSettings'
+import { PublicDocumentViewer } from './components/PublicDocumentViewer'
 import { useAuth } from './contexts/AuthContext'
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -52,6 +55,22 @@ function App() {
             </ProtectedRoute>
           } 
         />
+        <Route 
+          path="/profile/:username" 
+          element={<UserProfile />} 
+        />
+        <Route 
+          path="/settings" 
+          element={
+            <ProtectedRoute>
+              <UserSettings />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/public/:docId" 
+          element={<PublicDocumentViewer />} 
+        />
       </Routes>
     </div>
   )
@@ -59,6 +78,8 @@ function App() {
 
 function DocumentWorkspace() {
   const { docId } = useParams<{ docId: string }>()
+  const { user } = useAuth()
+  const navigate = useNavigate()
   const [docTitle, setDocTitle] = useState('Loading...')
 
   if (!docId) return null
@@ -66,15 +87,24 @@ function DocumentWorkspace() {
   return (
     <div className="flex-1 flex flex-col">
       <header className="bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 p-4 flex justify-between items-center transition-colors">
-        <h1 className="text-xl font-bold">Collab Workspace</h1>
         <div className="flex items-center space-x-4">
-          <div className="text-sm text-gray-500 dark:text-zinc-400">Doc ID: {docId}</div>
+          <h1 className="text-xl font-bold">Collab Workspace</h1>
+          <button onClick={() => navigate('/dashboard')} className="text-sm bg-gray-200 dark:bg-zinc-800 hover:bg-gray-300 dark:hover:bg-zinc-700 text-gray-800 dark:text-gray-200 px-3 py-1 rounded transition-colors">
+            Dashboard
+          </button>
+        </div>
+        <div className="flex items-center space-x-4">
+          <span className="text-sm text-gray-700 dark:text-zinc-300 hidden md:block">Hello, {user?.username}</span>
+          <button onClick={() => navigate(`/profile/${user?.username}`)} className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition-colors">
+            My Profile
+          </button>
+          <div className="text-sm text-gray-500 dark:text-zinc-400 hidden lg:block">Doc ID: {docId}</div>
           <button 
             onClick={() => {
               navigator.clipboard.writeText(window.location.href);
               toast.success('Link copied to clipboard!');
             }}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-sm font-medium transition"
+            className="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded text-sm font-medium transition"
           >
             Copy Share Link
           </button>

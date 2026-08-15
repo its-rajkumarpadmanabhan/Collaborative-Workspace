@@ -8,6 +8,7 @@ export const Dashboard: React.FC = () => {
   const navigate = useNavigate()
   const [invites, setInvites] = useState<any[]>([])
   const [workspaces, setWorkspaces] = useState<any[]>([])
+  const [isPublic, setIsPublic] = useState(false)
 
   useEffect(() => {
     fetchInvites()
@@ -57,7 +58,8 @@ export const Dashboard: React.FC = () => {
     try {
       const response = await api.post('workspaces/', {
         name: `${user?.username}'s ${mode === 'individual' ? 'Document' : 'Room'}`,
-        mode: mode
+        mode: mode,
+        is_public: isPublic
       })
       navigate(`/doc/${response.data.id}`)
     } catch (err) {
@@ -67,11 +69,30 @@ export const Dashboard: React.FC = () => {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 dark:bg-zinc-950 p-8 transition-colors">
-      <div className="absolute top-4 right-4">
-        <span className="mr-4 text-gray-700 dark:text-zinc-300 font-medium">Hello, {user?.username}</span>
+      <div className="absolute top-4 right-4 flex items-center space-x-4">
+        <span className="text-gray-700 dark:text-zinc-300 font-medium">Hello, {user?.username}</span>
+        <button onClick={() => navigate(`/profile/${user?.username}`)} className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition-colors">
+          My Profile
+        </button>
+        <button onClick={() => navigate(`/settings`)} className="text-sm bg-gray-600 hover:bg-gray-700 text-white px-3 py-1 rounded transition-colors">
+          Settings
+        </button>
         <button onClick={logout} className="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded transition-colors">
           Logout
         </button>
+      </div>
+
+      <div className="mb-6 flex items-center justify-center space-x-2">
+        <input 
+          type="checkbox" 
+          id="isPublic" 
+          checked={isPublic} 
+          onChange={(e) => setIsPublic(e.target.checked)} 
+          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-800 focus:ring-2 dark:bg-zinc-700 dark:border-zinc-600"
+        />
+        <label htmlFor="isPublic" className="text-sm font-medium text-gray-900 dark:text-gray-300">
+          Make new workspaces Public (visible on your profile)
+        </label>
       </div>
 
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
@@ -147,6 +168,9 @@ export const Dashboard: React.FC = () => {
                       <span className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 text-xs px-2 py-0.5 rounded-full">Room</span>
                     ) : (
                       <span className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 text-xs px-2 py-0.5 rounded-full">Individual</span>
+                    )}
+                    {ws.is_public && (
+                      <span className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 text-xs px-2 py-0.5 rounded-full ml-1">Public</span>
                     )}
                   </div>
                   <div className="text-xs text-gray-500 dark:text-zinc-400 mt-1">

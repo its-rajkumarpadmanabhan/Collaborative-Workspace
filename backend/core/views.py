@@ -6,7 +6,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import Workspace, WorkspaceInvite, WorkspaceMembership, Document
 from .serializers import (
     UserSerializer, RegisterSerializer, WorkspaceSerializer, 
-    WorkspaceInviteSerializer, DocumentSerializer
+    WorkspaceInviteSerializer, DocumentSerializer, UserProfileSerializer, UserUpdateSerializer
 )
 from django.shortcuts import get_object_or_404
 
@@ -40,10 +40,39 @@ def login_user(request):
 class UserViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get', 'put', 'delete'])
     def me(self, request):
-        serializer = UserSerializer(request.user)
+        if request.method == 'GET':
+            serializer = UserSerializer(request.user)
+            return Response(serializer.data)
+        elif request.method == 'PUT':
+            serializer = UserUpdateSerializer(request.user, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        elif request.method == 'DELETE':
+            request.user.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+class UserProfileViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    
+    def retrieve(self, request, pk=None):
+        user = get_object_or_404(User, username=pk)
+        serializer = UserProfileSerializer(user)
         return Response(serializer.data)
+
+class PublicDocumentExportView(viewsets.ViewSet):
+    permission_classes = [permissions.AllowAny]
+    
+    def retrieve(self, request, pk=None):
+        workspace = get_object_or_404(Workspace, id=pk, is_public=True)
+        doc = get_object_or_404(Document, workspace=workspace)
+        return Response({
+            "title": doc.title,
+            "content": doc.content
+        })
 
 class WorkspaceViewSet(viewsets.ModelViewSet):
     serializer_class = WorkspaceSerializer

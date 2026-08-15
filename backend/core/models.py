@@ -15,6 +15,7 @@ class Workspace(models.Model):
     name = models.CharField(max_length=255)
     owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='owned_workspaces', null=True, blank=True)
     mode = models.CharField(max_length=20, choices=MODE_CHOICES, default='individual')
+    is_public = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

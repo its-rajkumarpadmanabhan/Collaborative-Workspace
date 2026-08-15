@@ -6,6 +6,11 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'avatar']
 
+class UserUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['email', 'avatar']
+
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
 
@@ -25,7 +30,18 @@ class WorkspaceSerializer(serializers.ModelSerializer):
     owner = UserSerializer(read_only=True)
     class Meta:
         model = Workspace
-        fields = ['id', 'name', 'owner', 'mode', 'created_at']
+        fields = ['id', 'name', 'owner', 'mode', 'is_public', 'created_at']
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    public_workspaces = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'avatar', 'public_workspaces']
+
+    def get_public_workspaces(self, obj):
+        workspaces = Workspace.objects.filter(owner=obj, is_public=True)
+        return WorkspaceSerializer(workspaces, many=True).data
 
 from .models import WorkspaceInvite
 

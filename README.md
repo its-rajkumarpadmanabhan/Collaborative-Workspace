@@ -1,3 +1,4 @@
+
 # Real-Time Collaborative Workspace
 
 This project is a full-stack Real-Time Collaborative Workspace application that enables multiple users to edit documents simultaneously with live presence awareness (similar to Google Docs). 
