@@ -1,3 +1,4 @@
+<img width="1911" height="944" alt="image" src="https://github.com/user-attachments/assets/21414f73-d296-486f-8979-303057540a06" />
 # Real-Time Collaborative Workspace
 
 This plan details the implementation of a full-stack Real-Time Collaborative Workspace application based on Django (Channels, REST Framework, Celery) and React (Vite, TypeScript, TanStack Query, Zustand).
