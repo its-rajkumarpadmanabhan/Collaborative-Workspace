@@ -6,10 +6,37 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'username', 'email', 'avatar']
 
+class RegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password']
+
+    def create(self, validated_data):
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data.get('email', ''),
+            password=validated_data['password']
+        )
+        return user
+
 class WorkspaceSerializer(serializers.ModelSerializer):
+    owner = UserSerializer(read_only=True)
     class Meta:
         model = Workspace
-        fields = ['id', 'name', 'created_at']
+        fields = ['id', 'name', 'owner', 'mode', 'created_at']
+
+from .models import WorkspaceInvite
+
+class WorkspaceInviteSerializer(serializers.ModelSerializer):
+    sender = UserSerializer(read_only=True)
+    receiver = UserSerializer(read_only=True)
+    workspace = WorkspaceSerializer(read_only=True)
+
+    class Meta:
+        model = WorkspaceInvite
+        fields = ['id', 'workspace', 'sender', 'receiver', 'status', 'created_at']
 
 class WorkspaceMembershipSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
