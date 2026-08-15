@@ -2,40 +2,67 @@
 
 This plan details the implementation of a full-stack Real-Time Collaborative Workspace application based on Django (Channels, REST Framework, Celery) and React (Vite, TypeScript, TanStack Query, Zustand).
 
-## User Review Required
+## Local Setup without Docker (Windows)
 
-> [!WARNING]
-> This is a large-scale generation task. Generating all files in one go might take a while, and the total size might exceed context limits if generated all at once. I plan to generate the boilerplate and core logic in stages. Are you okay with me scaffolding the projects via commands first, or do you want me to just spit out the exact files requested as standalone files without full project scaffolding?
+To run this application natively on your machine without Docker, follow these steps. You will need **Python 3.12+**, **Node.js 20+**, and a local **Redis** instance running.
 
-## Proposed Changes
+*(Note: If you don't have Redis installed on Windows natively, the easiest way is to install it via WSL using `sudo apt install redis-server` and running `sudo service redis-server start`)*.
 
-### Phase 1: Project Setup & Models
-- Scaffold the Django project and Vite React project.
-- Configure `docker-compose.yml` for DB, Redis, Celery, Daphne, and Frontend.
-- Implement Django models in `core/models.py` (`User`, `Workspace`, `WorkspaceMembership`, `Document`, `DocumentComment`).
-- Setup `settings.py` for Celery, Channels, REST framework, SimpleJWT, and Postgres.
+### 1. Backend Setup
 
-### Phase 2: Authentication & ASGI Setup
-- Create custom JWT auth middleware for Channels (`core/middleware.py`).
-- Configure ASGI application (`asgi.py`).
-- Define WebSocket routing (`core/routing.py`).
+Open a terminal and navigate to the `backend` directory:
+```powershell
+cd backend
+```
 
-### Phase 3: Real-Time Consumer & Celery Tasks
-- Implement `DocumentConsumer` in `core/consumers.py` (broadcasting edits, cursor tracking, presence).
-- Implement background tasks in `core/tasks.py` (e.g. PDF/Markdown export).
-- Implement DRF views and a dedicated `services.py` layer.
+Create a virtual environment and activate it:
+```powershell
+python -m venv venv
+.\venv\Scripts\activate
+```
 
-### Phase 4: Frontend Implementation
-- Implement the `useCollabSocket` hook.
-- Implement the rich-text Tiptap `Editor` component.
-- Implement `PresenceBar` and `CursorOverlay`.
+Install dependencies:
+```powershell
+pip install -r requirements.txt
+```
 
-## Verification Plan
+Run database migrations (This will create a local `db.sqlite3` file since we aren't providing PostgreSQL environment variables):
+```powershell
+python manage.py migrate
+```
 
-### Automated Tests
-- N/A for this initial generation phase, but we can verify successful container orchestration.
+Start the Daphne ASGI server:
+```powershell
+daphne -b 127.0.0.1 -p 8000 collab_workspace.asgi:application
+```
 
-### Manual Verification
-- Run `docker-compose up -d --build`.
-- Verify the backend exposes the API and WebSocket endpoints correctly.
-- Verify the frontend loads, can authenticate, and connects to the WebSockets.
+### 2. Celery Worker
+
+Open a **new terminal tab**, activate the virtual environment, and navigate to the `backend` directory.
+
+Since Celery has known issues on Windows, you must run it with the `solo` pool:
+```powershell
+cd backend
+.\venv\Scripts\activate
+celery -A collab_workspace worker -P solo -l info
+```
+
+### 3. Frontend Setup
+
+Open a **third terminal tab** and navigate to the `frontend` directory:
+```powershell
+cd frontend
+```
+
+Install NPM packages:
+```powershell
+npm install
+```
+
+Start the Vite development server:
+```powershell
+npm run dev
+```
+
+### 4. Access the App
+The frontend will now be accessible at `http://localhost:5173`.
